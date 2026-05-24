@@ -13,7 +13,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/douyin-video-parser.git"
+    "url": "https://github.com/ldsoy/douyin-video-parser.git"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240117.0",
