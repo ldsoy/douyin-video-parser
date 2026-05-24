@@ -1,0 +1,10 @@
+name = "douyin-video-parser"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+
+[observability]
+enabled = true

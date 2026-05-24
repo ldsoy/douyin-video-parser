@@ -1,0 +1,24 @@
+{
+  "name": "douyin-video-parser",
+  "version": "1.0.0",
+  "description": "抖音视频解析后端接口，部署在 Cloudflare Workers 上",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/douyin-video-parser.git"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "typescript": "^5.3.3",
+    "vitest": "^4.1.7",
+    "wrangler": "^3.24.0"
+  }
+}

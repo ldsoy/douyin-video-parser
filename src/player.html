@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音视频解析</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0f0f0f; color: #e0e0e0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 20px; }
+
+.container { width: 100%; max-width: 640px; }
+
+.input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.input-row input { flex: 1; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 10px 12px; color: #e0e0e0; font-size: 14px; outline: none; transition: border-color .2s; }
+.input-row input:focus { border-color: #fe2c55; }
+.input-row input::placeholder { color: #666; }
+.input-row button { background: #fe2c55; color: #fff; border: none; border-radius: 6px; padding: 10px 20px; font-size: 14px; cursor: pointer; white-space: nowrap; transition: background .2s; }
+.input-row button:hover { background: #e0284d; }
+.input-row button:disabled { background: #662; cursor: not-allowed; }
+
+.player-wrap { display: none; margin-bottom: 12px; border-radius: 8px; overflow: hidden; background: #000; }
+.player-wrap.active { display: block; }
+.player-wrap video { width: 100%; display: block; }
+
+.link-row { display: none; gap: 8px; align-items: center; }
+.link-row.active { display: flex; }
+.link-row input { flex: 1; background: #1a1a1a; border: 1px solid #333; border-radius: 6px; padding: 8px 10px; color: #aaa; font-size: 13px; outline: none; }
+.link-row button { background: #333; color: #e0e0e0; border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap; transition: background .2s; }
+.link-row button:hover { background: #444; }
+
+.status { text-align: center; color: #888; font-size: 13px; padding: 60px 0; }
+.status.error { color: #fe2c55; }
+.status.loading { color: #aaa; }
+
+.info { display: none; margin-bottom: 12px; }
+.info.active { display: block; }
+.info .title { font-size: 15px; color: #e0e0e0; margin-bottom: 4px; line-height: 1.5; }
+.info .author { font-size: 13px; color: #888; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="input-row">
+    <input id="urlInput" type="text" placeholder="粘贴抖音分享链接或文本">
+    <button id="parseBtn">解析</button>
+  </div>
+  <div class="info" id="info">
+    <div class="title" id="videoTitle"></div>
+    <div class="author" id="videoAuthor"></div>
+  </div>
+  <div class="player-wrap" id="playerWrap">
+    <video id="videoPlayer" controls playsinline></video>
+  </div>
+  <div class="link-row" id="linkRow">
+    <input id="directLink" type="text" readonly>
+    <button id="copyBtn">复制</button>
+  </div>
+  <div class="status" id="status">粘贴抖音链接开始解析</div>
+</div>
+
+<script>
+const API = '/api/parse';
+
+const urlInput    = document.getElementById('urlInput');
+const parseBtn    = document.getElementById('parseBtn');
+const playerWrap  = document.getElementById('playerWrap');
+const videoPlayer = document.getElementById('videoPlayer');
+const linkRow     = document.getElementById('linkRow');
+const directLink  = document.getElementById('directLink');
+const copyBtn     = document.getElementById('copyBtn');
+const statusEl    = document.getElementById('status');
+const infoEl      = document.getElementById('info');
+const videoTitle  = document.getElementById('videoTitle');
+const videoAuthor = document.getElementById('videoAuthor');
+
+// Extract clean Douyin URL from share text
+function extractDouyinUrl(text) {
+  if (!text) return null;
+  text = text.trim();
+
+  // Short link: https://v.douyin.com/xxxxx
+  const shortMatch = text.match(/https?:\/\/v\.douyin\.com\/[\w-]+/);
+  if (shortMatch) return shortMatch[0];
+
+  // Long link: https://www.douyin.com/video/7xxxxxxxxx
+  const longMatch = text.match(/https?:\/\/(?:www\.)?douyin\.com\/video\/(\d+)/);
+  if (longMatch) return longMatch[0];
+
+  // iesdouyin link
+  const iesMatch = text.match(/https?:\/\/(?:www\.)?iesdouyin\.com\/share\/video\/(\d+)/);
+  if (iesMatch) return iesMatch[0];
+
+  // Pure video ID (19 digits)
+  const idMatch = text.match(/\b(7\d{18})\b/);
+  if (idMatch) return `https://www.douyin.com/video/${idMatch[1]}`;
+
+  return null;
+}
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.className = 'status' + (isError ? ' error' : '');
+  statusEl.style.display = 'block';
+}
+
+function hideStatus() {
+  statusEl.style.display = 'none';
+}
+
+function resetPlayer() {
+  playerWrap.classList.remove('active');
+  linkRow.classList.remove('active');
+  infoEl.classList.remove('active');
+  videoPlayer.src = '';
+  directLink.value = '';
+}
+
+async function parse(url) {
+  resetPlayer();
+  parseBtn.disabled = true;
+  setStatus('解析中...', false);
+
+  try {
+    const res = await fetch(`${API}?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+
+    if (!data.success) {
+      setStatus(data.error || '解析失败', true);
+      return;
+    }
+
+    const info = data.data;
+    hideStatus();
+
+    // Video info - API returns: desc, author.nickname, playAddr
+    const nickname = info.author?.nickname || '';
+    if (info.desc) videoTitle.textContent = info.desc;
+    if (nickname) videoAuthor.textContent = '@' + nickname;
+    if (info.desc || nickname) infoEl.classList.add('active');
+
+    // Play through proxy (bypass CDN referer check)
+    if (info.playAddr) {
+      videoPlayer.src = '/api/proxy?url=' + encodeURIComponent(info.playAddr);
+      playerWrap.classList.add('active');
+      videoPlayer.play().catch(() => {});
+    }
+
+    // Direct link (for copy/download with external tools)
+    if (info.playAddr) {
+      directLink.value = info.playAddr;
+      linkRow.classList.add('active');
+    }
+  } catch (e) {
+    setStatus('网络错误：' + e.message, true);
+  } finally {
+    parseBtn.disabled = false;
+  }
+}
+
+// Parse button
+parseBtn.addEventListener('click', () => {
+  const url = extractDouyinUrl(urlInput.value);
+  if (!url) {
+    setStatus('未识别到有效的抖音链接', true);
+    return;
+  }
+  parse(url);
+});
+
+// Enter key
+urlInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') parseBtn.click();
+});
+
+// Copy
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText(directLink.value).then(() => {
+    copyBtn.textContent = '已复制';
+    setTimeout(() => copyBtn.textContent = '复制', 1500);
+  });
+});
+
+// Hash param auto-play: #<encoded_url>
+(function initFromHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return;
+  const decoded = decodeURIComponent(hash);
+  urlInput.value = decoded;
+  const url = extractDouyinUrl(decoded);
+  if (url) parse(url);
+})();
+</script>
+</body>
+</html>
